@@ -8,13 +8,31 @@ Tjänsten är avsedd att ligga bakom den interna Nginx API-proxyn och nås som:
 http://api.ulnihnw.net/api/voice/
 ```
 
+## Speaker-alias
+
+Klienterna använder korta alias i stället för Home Assistant entity-id:n. Alias och default-högtalare definieras i `speakers.yaml`.
+
+Exempel:
+
+```yaml
+default: Vardagsrum
+
+speakers:
+  Vardagsrum: media_player.vardagsrummet
+  Kök: media_player.koket
+```
+
+Alias matchas utan hänsyn till stora/små bokstäver. `Kök`, `kök` och `KÖK` träffar alltså samma konfiguration.
+
+Konfigurationsfilen läses vid varje API-anrop, så ändringar i `speakers.yaml` kräver normalt ingen restart av tjänsten.
+
 ## API
 
 ### POST `/say`
 
-Spelar upp ett meddelande på angiven Home Assistant media player. Om `speaker` utelämnas används `DEFAULT_SPEAKER` från `.env`.
+Spelar upp ett meddelande på angivet speaker-alias. Om `speaker` utelämnas används aliaset i `default` från `speakers.yaml`.
 
-Exempel:
+Använd default-högtalaren:
 
 ```bash
 curl -X POST "http://api.ulnihnw.net/api/voice/say" \
@@ -22,20 +40,30 @@ curl -X POST "http://api.ulnihnw.net/api/voice/say" \
   -d '{"text":"Detta är ett test från Voice Proxy."}'
 ```
 
-Med explicit högtalare:
+Ange speaker-alias:
 
 ```bash
 curl -X POST "http://api.ulnihnw.net/api/voice/say" \
   -H "Content-Type: application/json" \
   -d '{
     "text":"Maten är klar.",
-    "speaker":"media_player.vardagsrummet"
+    "speaker":"Kök"
   }'
+```
+
+Ett okänt alias ger HTTP 400 och svaret innehåller vilka alias som är tillgängliga.
+
+### GET `/speakers`
+
+Visar default-alias och vilka speaker-alias som är konfigurerade, utan att exponera Home Assistant entity-id:n.
+
+```bash
+curl http://api.ulnihnw.net/api/voice/speakers
 ```
 
 ### GET `/health`
 
-En enkel kontroll av tjänsten och om Home Assistant-konfigurationen är laddad.
+En enkel kontroll av tjänsten, Home Assistant-konfigurationen och högtalarkonfigurationen.
 
 ```bash
 curl http://api.ulnihnw.net/api/voice/health
@@ -45,14 +73,12 @@ Health-endpointen returnerar aldrig `HA_TOKEN`.
 
 ## Swagger / OpenAPI
 
-När tjänsten går genom Nginx-proxyn:
-
 ```text
 http://api.ulnihnw.net/api/voice/docs
 http://api.ulnihnw.net/api/voice/openapi.json
 ```
 
-## Konfiguration
+## Miljökonfiguration
 
 Kopiera `.env.example` till `.env` och fyll i riktiga värden:
 
@@ -60,16 +86,18 @@ Kopiera `.env.example` till `.env` och fyll i riktiga värden:
 HA_URL=http://homeassistant.local:8123
 HA_TOKEN=replace-with-long-lived-access-token
 HA_TTS_ENTITY=tts.home_assistant_cloud
-DEFAULT_SPEAKER=media_player.vardagsrummet
+SPEAKERS_FILE=/opt/voice-proxy/speakers.yaml
 ```
 
 `HA_TOKEN` ska vara en Home Assistant Long-Lived Access Token. `.env` är medvetet exkluderad från Git via `.gitignore`.
 
+`SPEAKERS_FILE` är valfri. Om den inte anges används `speakers.yaml` i samma katalog som `app.py`.
+
 ## Installation
 
+Installera beroenden i den Python-miljö som tjänsten använder:
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -118,6 +146,9 @@ Nginx
 Voice Proxy :21965
         |
         v
+speaker-alias -> Home Assistant media_player
+        |
+        v
 Home Assistant REST API
         |
         v
@@ -127,4 +158,4 @@ tts.home_assistant_cloud
 Google-/Cast-högtalare
 ```
 
-Klienterna behöver därmed inte känna till Home Assistants adress, access-token eller interna service-anrop.
+Klienterna behöver därmed inte känna till Home Assistants adress, access-token eller interna entity-id:n.
