@@ -2,4 +2,4 @@ default: Vardagsrum
 
 speakers:
   Vardagsrum: media_player.vardagsrummet
-  # Kök: media_player.koket
+  Kök: media_player.koket
